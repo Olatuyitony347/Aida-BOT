@@ -30,12 +30,14 @@ function askQuestion(query) {
 function createWallet() {
     const wallet = ethers.Wallet.createRandom();
     console.log(`New Wallet: ${wallet.address}`);
+    console.log(`PrivateKey: ${wallet.privateKey}`);
+    console.log(`Seed Phrase: ${wallet.mnemonic.phrase}`);
     return wallet;
 }
 
 // Fungsi untuk menyimpan akun
 async function saveAccount(wallet, refCode) {
-    const data = `Address: ${wallet.address}\nPrivateKey: ${wallet.privateKey}\nRefCode: ${refCode}\n\n`;
+    const data = `Address: ${wallet.address}\nPrivateKey: ${wallet.privateKey}\nSeedPhrase: ${wallet.mnemonic.phrase}\nRefCode: ${refCode}\n\n`;
     await fs.appendFile('accounts.txt', data);
     console.log(`Account saved to accounts.txt`);
 }
@@ -67,7 +69,7 @@ async function login(wallet, inviterCode) {
         await saveAccount(wallet, response.data.user.refCode);
         await saveToken(response.data.tokens);
     } catch (error) {
-        console.error(`Login Failed:`);
+        console.error(`Login Failed:`, error.response?.data || error.message);
     }
 }
 
@@ -158,7 +160,7 @@ async function runBot() {
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
-    console.log('\nBot finished processing all tokens.');
+    console.log('\nsukses menjalankan semua token.');
 }
 
 // Fungsi utama
@@ -171,11 +173,10 @@ async function main() {
         console.log(`\nMembuat akun ${i + 1}/${numAccounts}...`);
         const wallet = createWallet();
         await login(wallet, inviterCode);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Delay antara pembuatan akun
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     console.log('\nSemua akun berhasil dibuat.');
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Delay sebelum eksekusi bot
     await runBot();
 }
 
