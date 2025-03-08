@@ -47,7 +47,7 @@ chmod +x bot.sh
 ```
 To Run continuously by reseting wallet files:
 ```
-./ bot.sh
+./bot.sh
 ```
 To run once:
 ```
