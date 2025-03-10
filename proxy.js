@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { ethers } = require('ethers');
 const fs = require('fs').promises;
-const HttpsProxyAgent = require('https-proxy-agent'); // Import proxy agent
+const { HttpsProxyAgent } = require('https-proxy-agent'); // Import proxy agent
 
 // Konfigurasi referral
 const INVITER_CODE = "2fw-wMUs7VBWY__";
