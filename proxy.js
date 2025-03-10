@@ -3,7 +3,7 @@ const { ethers } = require('ethers');
 const fs = require('fs').promises;
 const { HttpsProxyAgent } = require('https-proxy-agent'); // Import proxy agent
 
-// Konfigurasi referral
+// Referral Configuration
 const INVITER_CODE = "2fw-wMUs7VBWY__";
 const config = {
     baseUrl: 'https://back.aidapp.com',
@@ -17,7 +17,7 @@ const config = {
     }
 };
 
-// Fungsi untuk membaca proxy dari file
+// Read proxies from file
 async function readProxies(filename) {
     try {
         const content = await fs.readFile(filename, 'utf8');
@@ -28,32 +28,32 @@ async function readProxies(filename) {
     }
 }
 
-// Fungsi untuk membuat wallet baru
+// Create a new wallet
 function createWallet() {
     const wallet = ethers.Wallet.createRandom();
     console.log(`New Wallet: ${wallet.address}`);
     return wallet;
 }
 
-// Fungsi untuk menyimpan akun
+// Save account details
 async function saveAccount(wallet, refCode) {
     const data = `Address: ${wallet.address}\nPrivateKey: ${wallet.privateKey}\nRefCode: ${refCode}\n\n`;
     await fs.appendFile('accounts.txt', data);
     console.log(`Account saved to accounts.txt`);
 }
 
-// Fungsi untuk menyimpan token
+// Save access token
 async function saveToken(token) {
     await fs.appendFile('token.txt', `${token.access_token}\n`);
     console.log(`Access token saved to token.txt`);
 }
 
-// Fungsi untuk menandatangani pesan autentikasi
+// Sign authentication message
 async function signMessage(wallet, message) {
     return await wallet.signMessage(message);
 }
 
-// Fungsi untuk melakukan login dengan proxy
+// Perform login using a proxy
 async function login(wallet, proxy) {
     const timestamp = Date.now();
     const message = `MESSAGE_ETHEREUM_${timestamp}:${timestamp}`;
@@ -61,7 +61,7 @@ async function login(wallet, proxy) {
     
     const url = `${config.baseUrl}/user-auth/login?strategy=WALLET&chainType=EVM&address=${wallet.address}&token=${message}&signature=${signature}&inviter=${INVITER_CODE}`;
 
-    const agent = new HttpsProxyAgent(proxy); // Set proxy
+    const agent = new HttpsProxyAgent(proxy); // Use proxy
 
     try {
         const response = await axios.get(url, { 
@@ -70,7 +70,7 @@ async function login(wallet, proxy) {
         });
         console.log(`Login Success with proxy: ${proxy}`);
         
-        // Simpan akun dan token
+        // Save account and token
         await saveAccount(wallet, response.data.user.refCode);
         await saveToken(response.data.tokens);
     } catch (error) {
@@ -78,110 +78,7 @@ async function login(wallet, proxy) {
     }
 }
 
-// Membaca token dari file
-async function readTokens(filename) {
-    try {
-        const content = await fs.readFile(filename, 'utf8');
-        return content.trim().split('\n').filter(token => token.length > 0);
-    } catch (error) {
-        console.error(`Error reading ${filename}:`, error.message);
-        return [];
-    }
-}
-
-// Mendapatkan misi yang tersedia dengan proxy
-async function getAvailableMissions(accessToken, proxy) {
-    const agent = new HttpsProxyAgent(proxy);
-
-    try {
-        const currentDate = new Date().toISOString();
-        const response = await axios.get(
-            `${config.baseUrl}/questing/missions?filter%5Bdate%5D=${currentDate}&filter%5BcampaignId%5D=${config.campaignId}`,
-            { 
-                headers: { ...config.headers, 'authorization': `Bearer ${accessToken}` },
-                httpsAgent: agent
-            }
-        );
-        
-        return response.data.data.filter(mission => mission.progress === "0" && mission.id !== config.excludedMissionId);
-    } catch (error) {
-        console.error(`Error fetching available missions with proxy ${proxy}:`, error.message);
-        return [];
-    }
-}
-
-// Menyelesaikan misi dengan proxy
-async function completeMission(missionId, accessToken, proxy) {
-    const agent = new HttpsProxyAgent(proxy);
-
-    try {
-        await axios.post(`${config.baseUrl}/questing/mission-activity/${missionId}`, {}, {
-            headers: { ...config.headers, 'authorization': `Bearer ${accessToken}` },
-            httpsAgent: agent
-        });
-        console.log(`Mission ${missionId} completed successfully with proxy ${proxy}!`);
-        return true;
-    } catch (error) {
-        console.error(`Error completing mission ${missionId} with proxy ${proxy}`);
-        return false;
-    }
-}
-
-// Klaim reward misi dengan proxy
-async function claimMissionReward(missionId, accessToken, proxy) {
-    const agent = new HttpsProxyAgent(proxy);
-
-    try {
-        await axios.post(`${config.baseUrl}/questing/mission-reward/${missionId}`, {}, {
-            headers: { ...config.headers, 'authorization': `Bearer ${accessToken}` },
-            httpsAgent: agent
-        });
-        console.log(`Reward for mission ${missionId} claimed successfully with proxy ${proxy}!`);
-        return true;
-    } catch (error) {
-        console.error(`Error claiming reward for mission ${missionId} with proxy ${proxy}`);
-        return false;
-    }
-}
-
-// Menjalankan bot dengan proxy
-async function runBot(proxies) {
-    console.log(`\nMenyelesaikan Misi`);
-
-    const tokens = await readTokens('token.txt');
-    if (tokens.length === 0) {
-        console.error('No tokens found in token.txt');
-        return;
-    }
-
-    for (let i = 0; i < tokens.length; i++) {
-        const accessToken = tokens[i];
-        const proxy = proxies[i % proxies.length]; // Assign proxy per account
-        console.log(`\nProcessing token ${i + 1}/${tokens.length} using proxy: ${proxy}`);
-
-        const availableMissions = await getAvailableMissions(accessToken, proxy);
-        if (availableMissions.length === 0) {
-            console.log('No available missions to complete.');
-            continue;
-        }
-
-        for (const mission of availableMissions) {
-            console.log(`Processing mission: ${mission.label} (ID: ${mission.id})`);
-            
-            const completed = await completeMission(mission.id, accessToken, proxy);
-            if (completed) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                await claimMissionReward(mission.id, accessToken, proxy);
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-    }
-
-    console.log('\nBot finished processing all tokens.');
-}
-
-// Eksekusi bot
+// Execute bot to create 100 accounts with proxies
 async function main() {
     const proxies = await readProxies('proxy.txt');
     
@@ -190,12 +87,20 @@ async function main() {
         return;
     }
 
-    const wallet = createWallet();
-    const proxy = proxies[0]; // Use first proxy for initial login
+    console.log(`\nStarting account creation...`);
+    
+    for (let i = 0; i < 100; i++) {
+        const wallet = createWallet();
+        const proxy = proxies[i % proxies.length]; // Assign a proxy, looping if fewer than 100
 
-    await login(wallet, proxy);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Delay sebelum eksekusi bot
-    await runBot(proxies);
+        console.log(`\n[${i + 1}/100] Logging in with proxy: ${proxy}`);
+        await login(wallet, proxy);
+
+        // Small delay between account creation to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    console.log('\nFinished creating 100 accounts.');
 }
 
 main().catch(error => console.error('Bot encountered an error:', error));
