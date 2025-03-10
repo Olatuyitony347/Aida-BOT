@@ -17,6 +17,10 @@ node -v
 npm install ethers && npm install axios
 ```
 
+```
+npm install https-proxy-agent
+```
+
 Edit and save your ref code:
 ```
 nano main.js
