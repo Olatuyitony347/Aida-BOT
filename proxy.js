@@ -1,9 +1,8 @@
 const axios = require('axios');
 const { ethers } = require('ethers');
 const fs = require('fs').promises;
-const { HttpsProxyAgent } = require('https-proxy-agent'); // Import proxy agent
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
-// Referral Configuration
 const INVITER_CODE = "2fw-wMUs7VBWY__";
 const config = {
     baseUrl: 'https://back.aidapp.com',
@@ -53,15 +52,15 @@ async function signMessage(wallet, message) {
     return await wallet.signMessage(message);
 }
 
-// Perform login using a proxy
+// Login and return access token
 async function login(wallet, proxy) {
     const timestamp = Date.now();
     const message = `MESSAGE_ETHEREUM_${timestamp}:${timestamp}`;
     const signature = await signMessage(wallet, message);
     
     const url = `${config.baseUrl}/user-auth/login?strategy=WALLET&chainType=EVM&address=${wallet.address}&token=${message}&signature=${signature}&inviter=${INVITER_CODE}`;
-
-    const agent = new HttpsProxyAgent(proxy); // Use proxy
+    
+    const agent = new HttpsProxyAgent(proxy);
 
     try {
         const response = await axios.get(url, { 
@@ -73,12 +72,113 @@ async function login(wallet, proxy) {
         // Save account and token
         await saveAccount(wallet, response.data.user.refCode);
         await saveToken(response.data.tokens);
+        
+        return response.data.tokens.access_token; // Return token for task execution
     } catch (error) {
         console.error(`Login Failed with proxy ${proxy}:`, error.message);
+        return null;
     }
 }
 
-// Execute bot to create 100 accounts with proxies
+// Get available missions
+async function getAvailableMissions(accessToken, proxy) {
+    const agent = new HttpsProxyAgent(proxy);
+
+    try {
+        const currentDate = new Date().toISOString();
+        const response = await axios.get(
+            `${config.baseUrl}/questing/missions?filter%5Bdate%5D=${currentDate}&filter%5BcampaignId%5D=${config.campaignId}`,
+            { 
+                headers: { ...config.headers, 'authorization': `Bearer ${accessToken}` },
+                httpsAgent: agent
+            }
+        );
+        
+        return response.data.data.filter(mission => mission.progress === "0" && mission.id !== config.excludedMissionId);
+    } catch (error) {
+        console.error(`Error fetching missions with proxy ${proxy}:`, error.message);
+        return [];
+    }
+}
+
+// Complete a mission
+async function completeMission(missionId, accessToken, proxy) {
+    const agent = new HttpsProxyAgent(proxy);
+
+    try {
+        await axios.post(`${config.baseUrl}/questing/mission-activity/${missionId}`, {}, {
+            headers: { ...config.headers, 'authorization': `Bearer ${accessToken}` },
+            httpsAgent: agent
+        });
+        console.log(`Mission ${missionId} completed successfully with proxy ${proxy}`);
+        return true;
+    } catch (error) {
+        console.error(`Error completing mission ${missionId} with proxy ${proxy}`);
+        return false;
+    }
+}
+
+// Claim mission reward
+async function claimMissionReward(missionId, accessToken, proxy) {
+    const agent = new HttpsProxyAgent(proxy);
+
+    try {
+        await axios.post(`${config.baseUrl}/questing/mission-reward/${missionId}`, {}, {
+            headers: { ...config.headers, 'authorization': `Bearer ${accessToken}` },
+            httpsAgent: agent
+        });
+        console.log(`Reward for mission ${missionId} claimed successfully with proxy ${proxy}`);
+        return true;
+    } catch (error) {
+        console.error(`Error claiming reward for mission ${missionId} with proxy ${proxy}`);
+        return false;
+    }
+}
+
+// Run bot: Create an account, login, perform missions before moving to next proxy
+async function runBot(proxies) {
+    console.log(`\nStarting Account Creation and Mission Execution...`);
+    
+    for (let i = 0; i < 100; i++) {
+        const wallet = createWallet();
+        const proxy = proxies[i % proxies.length]; // Assign a proxy, looping if fewer than 100
+        
+        console.log(`\n[${i + 1}/100] Logging in with proxy: ${proxy}`);
+        const accessToken = await login(wallet, proxy);
+
+        if (!accessToken) {
+            console.log(`Skipping account ${wallet.address} due to failed login.`);
+            continue;
+        }
+
+        console.log(`\nFetching available missions for ${wallet.address}...`);
+        const availableMissions = await getAvailableMissions(accessToken, proxy);
+        
+        if (availableMissions.length === 0) {
+            console.log(`No available missions for ${wallet.address}. Moving to next account.`);
+            continue;
+        }
+
+        for (const mission of availableMissions) {
+            console.log(`Processing mission: ${mission.label} (ID: ${mission.id})`);
+            
+            const completed = await completeMission(mission.id, accessToken, proxy);
+            if (completed) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await claimMissionReward(mission.id, accessToken, proxy);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        console.log(`\nFinished processing account ${i + 1}. Moving to the next...`);
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Delay to prevent rate limits
+    }
+
+    console.log('\nBot finished creating accounts and executing missions.');
+}
+
+// Execute bot
 async function main() {
     const proxies = await readProxies('proxy.txt');
     
@@ -87,20 +187,7 @@ async function main() {
         return;
     }
 
-    console.log(`\nStarting account creation...`);
-    
-    for (let i = 0; i < 100; i++) {
-        const wallet = createWallet();
-        const proxy = proxies[i % proxies.length]; // Assign a proxy, looping if fewer than 100
-
-        console.log(`\n[${i + 1}/100] Logging in with proxy: ${proxy}`);
-        await login(wallet, proxy);
-
-        // Small delay between account creation to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 3000));
-    }
-
-    console.log('\nFinished creating 100 accounts.');
+    await runBot(proxies);
 }
 
 main().catch(error => console.error('Bot encountered an error:', error));
