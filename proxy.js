@@ -4,7 +4,7 @@ const fs = require('fs').promises;
 const HttpsProxyAgent = require('https-proxy-agent'); // Import proxy agent
 
 // Konfigurasi referral
-const INVITER_CODE = "olX9o5V7d8l4QJ7";
+const INVITER_CODE = "2fw-wMUs7VBWY__";
 const config = {
     baseUrl: 'https://back.aidapp.com',
     campaignId: '6b963d81-a8e9-4046-b14f-8454bc3e6eb2',
