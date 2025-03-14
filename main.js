@@ -3,7 +3,7 @@ const { ethers } = require('ethers');
 const fs = require('fs').promises;
 
 // Konfigurasi referral
-const INVITER_CODE = "olX9o5V7d8l4QJ7";
+const INVITER_CODE = "wTw3A44D3dc2DWA";
 const config = {
     baseUrl: 'https://back.aidapp.com',
     campaignId: '6b963d81-a8e9-4046-b14f-8454bc3e6eb2',
